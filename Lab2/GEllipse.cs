@@ -15,9 +15,9 @@ namespace Lab2
 	[Serializable()]
 	public class GEllipse : AbstractFigure //ellipse
 	{
-		[NonSerialized()] int x, y, w, h;
-		void transform()
+		public override Rectangle getRectangle()
 		{
+			int x, y, w, h;
 			if (p2.X > p1.X) //for X
 			{
 				x = p1.X;
@@ -38,22 +38,21 @@ namespace Lab2
 				y = p2.Y;
 				h = p1.Y - p2.Y;
 			}
+			return new Rectangle(x, y, w, h);
 		}
 		public override void drawFrame(ref Graphics g)
 		{
 			Pen p = new Pen(frameColor);
 			p.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
-			transform();
-			g.DrawEllipse(p, x, y, w, h);
+			g.DrawEllipse(p, getRectangle());
 			p.Dispose();
 		}
 		public override void draw(ref Graphics g)
 		{
 			Pen p = new Pen(primaryColor, lWidth);
-			transform();
 			if (fill)
-				g.FillEllipse(new SolidBrush(secondaryColor), x, y, w, h);
-			g.DrawEllipse(p, x, y, w, h);
+				g.FillEllipse(new SolidBrush(secondaryColor), getRectangle());
+			g.DrawEllipse(p, getRectangle());
 			p.Dispose();
 		}
 	}

@@ -28,5 +28,9 @@ namespace Lab2
 			g.DrawLine(p, p1, p2);
 			p.Dispose();
 		}
+		public override Rectangle getRectangle()
+		{
+			return Rectangle.FromLTRB(Math.Min(p1.X, p2.X), Math.Min(p1.Y, p2.Y), Math.Max(p1.X, p2.X), Math.Max(p1.Y, p2.Y));
+		}
 	}
 }

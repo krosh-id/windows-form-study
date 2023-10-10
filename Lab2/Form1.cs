@@ -1,10 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
 using System.Drawing;
-using System.Linq;
-using System.Text;
 using System.Windows.Forms;
 
 namespace Lab2
@@ -16,6 +11,7 @@ namespace Lab2
 		public int pictHeight=600,pictWidth=800; //дефолтные размеры новосозданного окна
 		public bool solidFill = false;
 		public bool textMode = false;
+		public bool selection = false; //флаг выбора
 		public int figureID = 0;
 		public Font textFont = new Font("Times New Roman", 12); //дефолтный текст 
         
@@ -32,6 +28,7 @@ namespace Lab2
 			
 			f2.backColor = backColorDialog.Color; //изменить для холста 
 			f2.solidFill = solidFill;
+			f2.selection = selection;
 			f2.figureID = figureID;
 			f2.textFont = textFont; 
 			//параметры формы
@@ -146,7 +143,6 @@ namespace Lab2
 				foreach(Form f2 in this.MdiChildren) 
 					((Form2)f2).lineWidth = pwd.Val; //применение ко всем дочерним формам
 				lineWidth = pwd.Val;
-				
 				statusStrip1.Items[0].Text = "Толщина линий: " + lineWidth; // отображение толщины в статус баре
 			}
 		}
@@ -232,7 +228,7 @@ namespace Lab2
 			toolStripButton11.Checked = false;
 			toolStripButton14.Checked = false;
 			
-			textMode = false; // new fill
+			textMode = false; 
 			statusMessage(); //refresh status message
 		}
 
@@ -310,7 +306,32 @@ namespace Lab2
 			setFigureType();
 		}
 
-		// Начало формы, выше всё нужно раскидать по классам 
+		// УПРАВЛЕНИЕ ФИГУРАМИ
+		//======================================================================================
+		public void setSelection()
+		{
+			if (selectToolStripMenuItem.Checked)
+			{
+				selectToolStripMenuItem.Checked = false;
+				toolStripButton15.Checked = false;
+				selection = false;
+			}
+			else
+			{
+				selectToolStripMenuItem.Checked = true;
+				toolStripButton15.Checked = true;
+				selection = true;
+			}
+			foreach (Form f2 in this.MdiChildren)
+				((Form2)f2).selection = selection;
+		}
+
+		public void deleteFigure()
+		{
+			if (this.ActiveMdiChild != null)
+				((Form2)this.ActiveMdiChild).deleteSelected();
+		}
+
 		//======================================================================================
 
 		public Form1()
@@ -498,24 +519,26 @@ namespace Lab2
 			setTextLabel();
 		}
 
-
-//специальное окно
-
-		public void newSpecialWindow()
-		{
-			SpecialForm f3 = new SpecialForm();
-			f3.MdiParent = this;
-			f3.pictHeight = pictHeight;
-			f3.pictWidth = pictWidth;
-			f3.AutoScrollMinSize = new Size(pictWidth, pictHeight); //скроллинг
-			f3.AutoScroll = true;
-			f3.Text = "Рисунок " + (++wCount);
-			f3.Show();
+		//выделить
+        private void toolStripButton16_Click(object sender, EventArgs e)
+        {
+			setSelection();
 		}
-		//клик по созданию нового окна
-		private void newSpecialForm_Click(object sender, EventArgs e)
+
+		private void selectToolStripMenuItem_Click(object sender, EventArgs e)
 		{
-			newSpecialWindow();
+			setSelection();
+		}
+
+		//удалить
+		private void toolStripButton17_Click(object sender, EventArgs e)
+        {
+			deleteFigure();
+		}
+
+        private void deleteToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+			deleteFigure();
 		}
 	}
 }

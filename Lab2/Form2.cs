@@ -19,7 +19,9 @@ namespace Lab2
 
 		public string fileName; //имя файла где сохранена картина
 		public bool fromFile = false;  // открыт из файла или нет
-		bool paintAction = false; //происходит рисование фигур или нет 
+		bool paintAction = false; //происходит рисование фигур или нет
+		bool selectAction = false;    //выбор какой-нибудь фигуры
+		bool dragAction = false;      //перемещение выбранной фигуры в новое место
 		bool changedCanvas = false; //служит для определения внесённых изменений ы
 		Point start,finish;
 		List<AbstractFigure> fstorage = new List<AbstractFigure>();
@@ -34,7 +36,8 @@ namespace Lab2
 		public bool solidFill = false; //флаг заливки
 		public int figureID = 0; //линия по дефолту 
 		public int pictWidth=1,pictHeight=1;
-		public Font textFont; //шрифт текста 
+		public Font textFont; //шрифт текста
+		public bool selection = false; //флаг выбора
 
 		//ПРОЦЕСС РИСОВАНИЯ
 		//======================================================================================
@@ -47,8 +50,16 @@ namespace Lab2
 			Graphics g = Graphics.FromImage(canvas);
 			g.Clear(backColor);
 			foreach(AbstractFigure go in fstorage) //отрисовывает все фигуры из массива
+			{
 				go.draw(ref g);
-			if(paintAction)
+				if (go.selected)
+				{
+					go.drawSelection(ref g); //нарисовать обведенный прямоугольник (в виде рамки)
+					if (dragAction)
+						go.drawDragged(ref g, start, finish); //построить кадр в вероятной точке назначения
+				}
+			}
+			if (paintAction || selectAction)
 				toPaint.drawFrame(ref g); //рисование новой фигуры ( временной)
 			g.Dispose();
 		}
@@ -78,6 +89,63 @@ namespace Lab2
 			toPaint.fill = solidFill;
 		}
 
+		public void deleteSelected()
+		{
+			for (int i = 0; i < fstorage.Count; i++)
+				if (fstorage[i].selected)
+					fstorage.RemoveAt(i--); //удаляет выбранную фигуру
+			drawCanvas();
+			Refresh();
+		}
+
+		private void selectFigures()
+		{
+			dropSelection();
+			Rectangle trect = toPaint.getRectangle(); //выбранная область
+			for (int i = 0; i < fstorage.Count; i++)
+				if (trect.IntersectsWith(fstorage[i].getRectangle()))
+					fstorage[i].selected = true; //помечает фигуру как выделенную, если ее прямоугольник пересекается с областью выделения
+		}
+
+		public void dropSelection()
+		{
+			for (int i = 0; i < fstorage.Count; i++)
+				fstorage[i].selected = false; //помечает все фигура как не выбранные
+		}
+
+		public bool isInsideOfRectangle(Rectangle rect, Point p)
+		{ //проверить, что точка p лежит внутри прямоугольника rect
+			return ((p.X >= rect.Left) && (p.X <= rect.Left + rect.Width) && (p.Y >= rect.Top) && (p.Y <= rect.Top + rect.Height));
+		}
+
+		public bool isInside(Rectangle sm, Rectangle lg)
+		{ //если прямоугольник sm лежит внутри прямоугольника lg
+			return (isInsideOfRectangle(lg, new Point(sm.Left, sm.Top)) && isInsideOfRectangle(lg, new Point(sm.Left + sm.Width, sm.Top + sm.Height)));
+		}
+
+		public void selectSingleFigure(Point p)
+		{
+			bool inside = false;
+			for (int i = fstorage.Count - 1; i >= 0; i--)
+				if (isInsideOfRectangle(fstorage[i].getRectangle(), p))
+				{ //найти самую верхнюю фигуру, содержащую точку p
+					fstorage[i].selected = true;
+					inside = true;
+					break;
+				}
+			if (!inside)
+				dropSelection(); //точка p не принадлежит ни одной фигуре
+		}
+
+		//перемещение выбранной фигуры
+		public void moveSelectedFigures(Point f, Point s)
+		{
+			for (int i = 0; i < fstorage.Count; i++)
+				if (fstorage[i].selected)
+					fstorage[i].move(f, s);
+			drawCanvas();
+			Refresh();
+		}
 		//I/O
 		//======================================================================================
 
@@ -137,13 +205,38 @@ namespace Lab2
 		{ //начало рисования
 			int eX = e.X - AutoScrollPosition.X;
 			int eY = e.Y - AutoScrollPosition.Y;
-			if(e.Button==MouseButtons.Left && eX<=pictWidth && eY<=pictHeight)
+			if (eX <= pictWidth && eY <= pictHeight) //если внутри канваса
 			{
-				start.X = eX;
-				start.Y = eY;
-				finish = start;
-				initPainter();
-				paintAction = true;
+				if (e.Button == MouseButtons.Left && !selection)
+				{ //рисование
+					dropSelection();
+					start.X = eX;
+					start.Y = eY;
+					finish = start;
+					initPainter();
+					paintAction = true;
+				}
+				else
+				if (e.Button == MouseButtons.Left && selection)
+				{
+					start.X = eX;
+					start.Y = eY;
+					foreach (AbstractFigure af in fstorage)
+						if (af.selected && isInsideOfRectangle(af.getRectangle(), start))
+						{
+							dragAction = true; //подготовка к перетаскиванию
+							break;
+						}
+					if (!dragAction)
+					{
+						////подготовка к выбору
+						toPaint = new GRectangle();
+						toPaint.loadColors(primaryColor, secondaryColor, frameColor);
+						toPaint.firstPoint = new Point(eX, eY);
+						toPaint.secondPoint = new Point(eX, eY);
+						selectAction = true;
+					}
+				}
 			}
 		}
 
@@ -151,7 +244,7 @@ namespace Lab2
 		{ //процесс рисования
 			int eX = e.X - AutoScrollPosition.X;
 			int eY = e.Y - AutoScrollPosition.Y;
-			if(paintAction)
+			if(paintAction || selectAction)
 			{
 				finish.X = eX;
 				finish.Y = eY;
@@ -159,11 +252,20 @@ namespace Lab2
 				drawCanvas(); //перерисовка битмапа
 				Refresh();
 			}
+			if (selectAction)
+				selectFigures();
+			if (dragAction)
+			{
+				finish.X = eX;
+				finish.Y = eY;
+				drawCanvas();
+				Refresh();
+			}
 			((Form1)this.ParentForm).setMousePositionCaption(eX,eY);
 		}
 
 		private void Form2_MouseUp(object sender, MouseEventArgs e)
-		{ //paint is finished
+		{ //рисование закончено
 			int eX = e.X - AutoScrollPosition.X;
 			int eY = e.Y - AutoScrollPosition.Y;
 			if(paintAction)
@@ -176,6 +278,38 @@ namespace Lab2
 				if(eX<=pictWidth && eY<=pictHeight && eX>=0 && eY>=0) //проверяет чтобы фигура не выходила из битмапа canvas
 					fstorage.Add(toPaint); //добавляет новую фигуру к массиву
 				drawCanvas(); //перерисовка
+				Refresh();
+			}
+			if (selectAction)
+			{
+				selectAction = false;
+				start = toPaint.firstPoint;
+				if (Math.Abs(start.X - finish.X) < 3 && Math.Abs(start.Y - finish.Y) < 3)
+					selectSingleFigure(toPaint.firstPoint);
+				drawCanvas();
+				Refresh();
+			}
+			if (dragAction)
+			{
+				//проверяет новую позицию
+				bool OK = true;
+				int dx = finish.X - start.X;
+				int dy = finish.Y - start.Y;
+				foreach (AbstractFigure af in fstorage)
+				{
+					Rectangle rect = af.getRectangle();
+					if (af.selected)
+						if (!isInside(new Rectangle(rect.Left + dx, rect.Top + dy, rect.Width, rect.Height), new Rectangle(0, 0, pictWidth, pictHeight)))
+						{
+							OK = false;
+							break;
+						}
+				}
+				if (OK)
+					moveSelectedFigures(start, finish);
+				changedCanvas = true;
+				dragAction = false;
+				drawCanvas();
 				Refresh();
 			}
 		}

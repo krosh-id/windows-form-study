@@ -1,23 +1,32 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
 using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Windows.Forms;
-using System.Runtime.Serialization;
-using System.Runtime.Serialization.Formatters.Binary;
-using System.IO;
+
 
 namespace Lab2
 {
 	[Serializable()]
 	public class GRectangle : AbstractFigure //rectangle
 	{
-		[NonSerialized()] int x, y, w, h;
-		void transform()
+		public override void drawFrame(ref Graphics g)
 		{
+			Pen p = new Pen(frameColor);
+			p.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
+			g.DrawRectangle(p, getRectangle());
+			p.Dispose();
+		}
+		public override void draw(ref Graphics g)
+		{
+			Pen p = new Pen(primaryColor, lWidth);
+			
+			if (fill)
+				g.FillRectangle(new SolidBrush(secondaryColor), getRectangle());
+			g.DrawRectangle(p, getRectangle());
+			p.Dispose();
+		}
+
+		public override Rectangle getRectangle()
+		{
+			int x, y, w, h;
 			if (p2.X > p1.X) //for X
 			{
 				x = p1.X;
@@ -38,23 +47,7 @@ namespace Lab2
 				y = p2.Y;
 				h = p1.Y - p2.Y;
 			}
-		}
-		public override void drawFrame(ref Graphics g)
-		{
-			Pen p = new Pen(frameColor);
-			p.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
-			transform();
-			g.DrawRectangle(p, x, y, w, h);
-			p.Dispose();
-		}
-		public override void draw(ref Graphics g)
-		{
-			Pen p = new Pen(primaryColor, lWidth);
-			transform();
-			if (fill)
-				g.FillRectangle(new SolidBrush(secondaryColor), x, y, w, h);
-			g.DrawRectangle(p, x, y, w, h);
-			p.Dispose();
+			return new Rectangle(x, y, w, h);
 		}
 	}
 }
