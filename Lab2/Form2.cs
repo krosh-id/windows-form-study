@@ -1,14 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
 using System.Drawing;
-using System.Linq;
-using System.Text;
 using System.Windows.Forms;
-using System.Runtime.Serialization;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.IO;
+using System.Drawing.Imaging;
 
 namespace Lab2
 {
@@ -24,7 +20,7 @@ namespace Lab2
 		bool dragAction = false;      //перемещение выбранной фигуры в новое место
 		bool changedCanvas = false; //служит для определения внесённых изменений ы
 		Point start,finish;
-		List<AbstractFigure> fstorage = new List<AbstractFigure>();
+		public List<AbstractFigure> fstorage = new List<AbstractFigure>();
 		AbstractFigure toPaint;
 		//painting stuff дефолтные значения при рисовании
 		Bitmap canvas = new Bitmap(10,10); //новый экземпляр класса Bitmap с заданным размером.
@@ -94,23 +90,28 @@ namespace Lab2
 			for (int i = 0; i < fstorage.Count; i++)
 				if (fstorage[i].selected)
 					fstorage.RemoveAt(i--); //удаляет выбранную фигуру
-			drawCanvas();
-			Refresh();
+			((Form1)this.MdiParent).clipboardToolsMenu(false); //все выделенное было удалено - нечего вырезать или копировать
+			redrawAll();
 		}
 
 		private void selectFigures()
 		{
-			dropSelection();
+			dropSelection(); //отмена предыдущего выбора
 			Rectangle trect = toPaint.getRectangle(); //выбранная область
 			for (int i = 0; i < fstorage.Count; i++)
 				if (trect.IntersectsWith(fstorage[i].getRectangle()))
 					fstorage[i].selected = true; //помечает фигуру как выделенную, если ее прямоугольник пересекается с областью выделения
-		}
+			parentClipboardInterface(); //обновление интерфейса родительской формы
+			redrawAll();
+
+        }
 
 		public void dropSelection()
 		{
 			for (int i = 0; i < fstorage.Count; i++)
 				fstorage[i].selected = false; //помечает все фигура как не выбранные
+			((Form1)this.MdiParent).clipboardToolsMenu(false); //отключение
+			redrawAll();
 		}
 
 		public bool isInsideOfRectangle(Rectangle rect, Point p)
@@ -135,6 +136,7 @@ namespace Lab2
 				}
 			if (!inside)
 				dropSelection(); //точка p не принадлежит ни одной фигуре
+			parentClipboardInterface();
 		}
 
 		//перемещение выбранной фигуры
@@ -143,6 +145,11 @@ namespace Lab2
 			for (int i = 0; i < fstorage.Count; i++)
 				if (fstorage[i].selected)
 					fstorage[i].move(f, s);
+			redrawAll();
+		}
+
+		public void redrawAll()
+		{
 			drawCanvas();
 			Refresh();
 		}
@@ -172,10 +179,132 @@ namespace Lab2
 			fstorage = (List<AbstractFigure>)formatter.Deserialize(stream);
 			stream.Close();
 			//repaint
-			drawCanvas();
-			Refresh();
+			redrawAll();
 		}
 
+		//CLIPBOARD
+		//======================================================================================
+
+		public void selectAll()
+		{
+			selection = true;
+			for (int i = 0; i < fstorage.Count; i++)
+				fstorage[i].selected = true;
+			parentClipboardInterface();
+			redrawAll();
+		}
+
+		public void parentClipboardInterface()
+		{
+			bool anySelected = false;
+			foreach (AbstractFigure af in fstorage)
+				if (af.selected)
+				{
+					anySelected = true;
+					break;
+				}
+			((Form1)this.MdiParent).clipboardToolsMenu(anySelected);
+		}
+
+		public void copySelected()
+		{ //any figures is already selected
+			List<AbstractFigure> toc = new List<AbstractFigure>();
+			foreach (AbstractFigure af in fstorage)
+				if (af.selected)
+					toc.Add(af); //add selected figure to list
+								 //save serialized list
+			BinaryFormatter formatter = new BinaryFormatter();
+			MemoryStream ms = new MemoryStream();
+			formatter.Serialize(ms, toc);
+			Clipboard.SetDataObject(ms, true);
+			ms.Close();
+			checkClipboard();
+		}
+
+		public void copyMetafile()
+		{
+			List<AbstractFigure> toc = new List<AbstractFigure>();
+			int minx = Int32.MaxValue, miny = Int32.MaxValue;
+			int maxx = 0, maxy = 0;
+			foreach (AbstractFigure af in fstorage)
+				if (af.selected) //copy selected figures to new List
+				{
+					toc.Add(af);
+					minx = Math.Min(minx, af.getRectangle().Left);
+					miny = Math.Min(miny, af.getRectangle().Top);
+					maxx = Math.Max(maxx, af.getRectangle().Right);
+					maxy = Math.Max(maxy, af.getRectangle().Bottom);
+				}
+			//create new metafile
+			Graphics g = Graphics.FromImage(new Bitmap(maxx, maxy));
+			IntPtr dc = g.GetHdc();
+			Metafile mf = new Metafile(dc, EmfType.EmfOnly);
+			g.ReleaseHdc(dc);
+			g.Dispose();
+			//draw selected figures on metafile
+			Graphics gr = Graphics.FromImage(mf);
+			foreach (AbstractFigure af in toc)
+			{
+				Rectangle rect = af.getRectangle();
+				Point from = new Point(rect.Left, rect.Top);
+				Point to = new Point(rect.Left - minx, rect.Top - miny);
+				af.move(from, to); //paint selected figures at graphics
+				af.draw(ref gr);
+				af.move(to, from);
+			}
+			gr.Dispose();
+			ClipboardMetafileHelper.PutEnhMetafileOnClipboard(this.Handle, mf); //copy metafile to clipboard	;
+		}
+
+		public void cutSelected()
+		{
+			copySelected();
+			deleteSelected();
+		}
+
+		public void pasteData()
+		{
+			dropSelection();
+			//get data from clipboard
+			MemoryStream ms = (MemoryStream)Clipboard.GetDataObject().GetData(typeof(MemoryStream));
+			BinaryFormatter formatter = new BinaryFormatter();
+			List<AbstractFigure> toc = (List<AbstractFigure>)formatter.Deserialize(ms);
+			ms.Close();
+			//check data to insert to fit in picture size
+			int minx = Int32.MaxValue, miny = Int32.MaxValue;
+			foreach (AbstractFigure af in toc)
+			{
+				Rectangle rect = af.getRectangle();
+				if (rect.Width > pictWidth || rect.Height > pictHeight)
+				{
+					MessageBox.Show("Изображение слишком большое!");
+					return;
+				}
+				minx = Math.Min(minx, rect.Left);
+				miny = Math.Min(miny, rect.Top);
+			}
+			//paste from clipboard
+			foreach (AbstractFigure af in toc)
+			{
+				Rectangle rect = af.getRectangle();
+				af.move(new Point(rect.Left, rect.Top), new Point(rect.Left - minx, rect.Top - miny)); //convert coordinates
+				af.selected = true;
+				fstorage.Add(af);
+			}
+			//switch selection mode on
+			((Form1)MdiParent).setSelectionMode(true);
+			parentClipboardInterface();
+			redrawAll();
+		}
+
+		public void checkClipboard()
+		{
+			IDataObject data = Clipboard.GetDataObject();
+			if (data.GetDataPresent(typeof(MemoryStream)))
+				((Form1)MdiParent).pasteMenu(true); //clipboard is containing something that program can use
+			else
+				((Form1)MdiParent).pasteMenu(false);
+		}
 		//FORM APPEARANCE
 		//======================================================================================
 
@@ -194,8 +323,8 @@ namespace Lab2
 		private void Form2_Activated(object sender, EventArgs e)
 		{
 			((Form1)this.ParentForm).setWindowSizeCaption(pictWidth,pictHeight); //изменение в статус баре
-			this.drawCanvas();
-			this.Refresh();
+			parentClipboardInterface();
+			redrawAll();
 		}
 
 		//СОБЫТИЯ МЫШИ
@@ -221,6 +350,7 @@ namespace Lab2
 				{
 					start.X = eX;
 					start.Y = eY;
+					//check start point for belonging to any selected fugure
 					foreach (AbstractFigure af in fstorage)
 						if (af.selected && isInsideOfRectangle(af.getRectangle(), start))
 						{
@@ -268,26 +398,22 @@ namespace Lab2
 		{ //рисование закончено
 			int eX = e.X - AutoScrollPosition.X;
 			int eY = e.Y - AutoScrollPosition.Y;
-			if(paintAction)
+			finish.X = eX;
+			finish.Y = eY;
+			if (paintAction)
 			{
 				paintAction = false;
-				finish.X = eX;	
-				finish.Y = eY;
 				toPaint.secondPoint = finish;
 				changedCanvas = true; //если что то нарисовано
-				if(eX<=pictWidth && eY<=pictHeight && eX>=0 && eY>=0) //проверяет чтобы фигура не выходила из битмапа canvas
+				if (isInside(toPaint.getRectangle(), new Rectangle(0, 0, pictWidth, pictHeight))) //проверяет чтобы фигура не выходила из битмапа canvas
 					fstorage.Add(toPaint); //добавляет новую фигуру к массиву
-				drawCanvas(); //перерисовка
-				Refresh();
-			}
+			}//no "else" - only one action is allowed in one time
 			if (selectAction)
 			{
 				selectAction = false;
 				start = toPaint.firstPoint;
 				if (Math.Abs(start.X - finish.X) < 3 && Math.Abs(start.Y - finish.Y) < 3)
 					selectSingleFigure(toPaint.firstPoint);
-				drawCanvas();
-				Refresh();
 			}
 			if (dragAction)
 			{
@@ -309,9 +435,8 @@ namespace Lab2
 					moveSelectedFigures(start, finish);
 				changedCanvas = true;
 				dragAction = false;
-				drawCanvas();
-				Refresh();
 			}
+			redrawAll();
 		}
 
 		//когда курсор выходит за границу формы 
@@ -334,20 +459,26 @@ namespace Lab2
 		//Происходит при изменении размеров 
 		private void Form2_Resize(object sender, EventArgs e)
 		{
-			drawCanvas();
-			Refresh();
+			redrawAll();
 		}
 
-		//ЗАКРЫТИЕ ФОРМЫЫ
-		//======================================================================================
+        private void Form2_Load(object sender, EventArgs e)
+        {
 
-		private void Form2_FormClosed(object sender, FormClosedEventArgs e)
+        }
+
+        //ЗАКРЫТИЕ ФОРМЫЫ
+        //======================================================================================
+
+        private void Form2_FormClosed(object sender, FormClosedEventArgs e)
 		{
 			if(this.ParentForm.MdiChildren.Length==1)
 			{
-				((Form1)this.ParentForm).deactivateMenu(); //при закрытии последнее дочернего элемента 
+				((Form1)this.ParentForm).fileOperationsMenu(false); //при закрытии последнее дочернего элемента 
 				((Form1)this.ParentForm).setMousePositionCaption(-1,-1);
 				((Form1)this.ParentForm).setWindowSizeCaption(-1,-1);
+				((Form1)this.ParentForm).clipboardToolsMenu(false); //nothing to copy
+				((Form1)this.ParentForm).pasteMenu(false); //nowhere to paste
 			}
 		}
 
@@ -365,5 +496,9 @@ namespace Lab2
 				}
 				
 		}
-    }
+		private void timer1_Tick(object sender, EventArgs e)
+		{
+			checkClipboard();
+		}
+	}
 }

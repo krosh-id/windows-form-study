@@ -46,21 +46,14 @@ namespace Lab2
 		//======================================================================================
 
 		//включение элементов формы
-		public void activateMenu()
-		{
-			saveToolStripMenuItem.Enabled = true;  //сохранить
-			saveAsToolStripMenuItem.Enabled = true; // сохранить как
-			toolStripButton3.Enabled = true; // кнопка сохранить в кнопочной панели
+		public void fileOperationsMenu(bool act)
+		{ //enable/disable menu items
+			saveToolStripMenuItem.Enabled = act;
+			saveAsToolStripMenuItem.Enabled = act;
+			toolStripButton3.Enabled = act;
+			selectAllToolStripMenuItem.Enabled = act;
 		}
 
-		//отключение элементов формы
-		public void deactivateMenu()
-		{
-			saveToolStripMenuItem.Enabled = false;
-			saveAsToolStripMenuItem.Enabled = false;
-			toolStripButton3.Enabled = false;
-		}
-		
 		//отображение размера окна в статус баре
 		public void setWindowSizeCaption(int w,int h)
 		{
@@ -90,6 +83,26 @@ namespace Lab2
 				statusStrip1.Items[9].Text = " ";
 		}
 
+		public void clipboardToolsMenu(bool act)
+		{
+			copyMetafileToolStripMenuItem.Enabled = act;
+			copySelectedToolStripMenuItem.Enabled = act;
+			cutSelectedToolStripMenuItem.Enabled = act;
+		}
+
+		public void pasteMenu(bool act)
+		{
+			pasteToolStripMenuItem.Enabled = act;
+		}
+
+		public void setSelection()
+		{
+			if (selectToolStripMenuItem.Checked)
+				setSelectionMode(false);
+			else
+				setSelectionMode(true);
+		}
+
 		//FILE I/O
 		//======================================================================================
 
@@ -104,7 +117,7 @@ namespace Lab2
 				((Form2)this.ActiveMdiChild).fileName = openFileDialog1.FileName;
 				this.ActiveMdiChild.Text = openFileDialog1.FileName; //установка текста в заголовке документа
 			}
-			activateMenu(); //активация кнопок 
+			fileOperationsMenu(true); //активация кнопок 
 		}
 
 		//сохранение нового файла
@@ -308,22 +321,26 @@ namespace Lab2
 
 		// УПРАВЛЕНИЕ ФИГУРАМИ
 		//======================================================================================
-		public void setSelection()
+		public void setSelectionMode(bool act)
 		{
-			if (selectToolStripMenuItem.Checked)
-			{
-				selectToolStripMenuItem.Checked = false;
-				toolStripButton15.Checked = false;
-				selection = false;
-			}
-			else
+			if (act)
 			{
 				selectToolStripMenuItem.Checked = true;
 				toolStripButton15.Checked = true;
 				selection = true;
 			}
+			else
+			{
+				selectToolStripMenuItem.Checked = false;
+				toolStripButton15.Checked = false;
+				selection = false;
+			}
 			foreach (Form f2 in this.MdiChildren)
+			{
 				((Form2)f2).selection = selection;
+				if (!selection)
+					((Form2)f2).dropSelection();
+			}
 		}
 
 		public void deleteFigure()
@@ -332,6 +349,36 @@ namespace Lab2
 				((Form2)this.ActiveMdiChild).deleteSelected();
 		}
 
+		public void selectAll()
+		{
+			setSelectionMode(true);
+			if (this.ActiveMdiChild != null)
+				((Form2)this.ActiveMdiChild).selectAll();
+		}
+
+		public void copySelected()
+		{
+			if (this.ActiveMdiChild != null)
+				((Form2)this.ActiveMdiChild).copySelected();
+		}
+
+		public void copyMetafile()
+		{
+			if (this.ActiveMdiChild != null)
+				((Form2)this.ActiveMdiChild).copyMetafile();
+		}
+
+		public void cutSelected()
+		{
+			if (this.ActiveMdiChild != null)
+				((Form2)this.ActiveMdiChild).cutSelected();
+		}
+
+		public void pasteData()
+		{
+			if (this.ActiveMdiChild != null)
+				((Form2)this.ActiveMdiChild).pasteData();
+		}
 		//======================================================================================
 
 		public Form1()
@@ -343,7 +390,7 @@ namespace Lab2
 		private void newToolStripMenuItem1_Click(object sender, EventArgs e)
 		{
 			newWindow();
-			activateMenu();
+			fileOperationsMenu(true);
 		}
 
 		//открыть
@@ -432,7 +479,7 @@ namespace Lab2
 		private void toolStripButton1_Click(object sender, EventArgs e)
 		{
 			newWindow();
-			activateMenu();
+			fileOperationsMenu(true);
 		}
 
 		//открыть
@@ -536,9 +583,47 @@ namespace Lab2
 			deleteFigure();
 		}
 
-        private void deleteToolStripMenuItem_Click(object sender, EventArgs e)
-        {
+		private void deleteToolStripMenuItem_Click(object sender, EventArgs e)
+		{
 			deleteFigure();
+		}
+
+		//копирование метафайла
+        private void copyMetafileToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+			copyMetafile();
+		}
+		//копирование 
+		private void copySelectedStripMenuItem_Click(object sender, EventArgs e)
+		{
+			copySelected();
+		}
+		//вставить
+        private void pasteToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+			pasteData();
+		}
+		//выделить всё
+        private void selectAllToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+			selectAll();
+		}
+
+        private void helpToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+			Program.helpMe();
+		}
+
+        private void magic1StripMenuItem_Click(object sender, EventArgs e)
+        {
+			if (ActiveMdiChild != null)
+				Program.m1((Form2)ActiveMdiChild);
+		}
+
+        //вырезать
+        private void cutSelectedToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+			cutSelected();
 		}
 	}
 }
